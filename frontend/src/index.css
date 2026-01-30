@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Agar background gelap otomatis berlaku ke seluruh layar */
+body {
+    background-color: #0f172a;
+}
