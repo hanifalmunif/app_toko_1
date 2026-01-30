@@ -3,126 +3,122 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 
-// Handle preflight request (CORS)
 if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
   exit(0);
 }
 
 include 'koneksi.php';
 
-// Cek folder uploads, jika belum ada buat folder
+// Buat folder uploads jika belum ada
 $target_dir = "uploads/";
 if (!file_exists($target_dir)) {
-  mkdir($target_dir, 0777, true);
+  mkdir($target_dir, 0755, true);
 }
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-// --- GET: AMBIL DATA RIWAYAT & PROFIL ---
+// --- GET: AMBIL DATA ATAU HAPUS DATA ---
 if ($method == 'GET') {
+
+  // 1. CEK APAKAH ADA ACTION DELETE? (INI YANG KITA TAMBAHKAN)
+  if (isset($_GET['action']) && $_GET['action'] == 'delete') {
+    $no_kwitansi = $_GET['no_kwitansi'];
+
+    // Mencegah SQL Injection sederhana
+    $no_kwitansi = mysqli_real_escape_string($koneksi, $no_kwitansi);
+
+    // Hapus berdasarkan no_kwitansi
+    $del = mysqli_query($koneksi, "DELETE FROM kwitansi WHERE no_kwitansi='$no_kwitansi'");
+
+    if ($del) {
+      echo json_encode(["success" => true, "message" => "Berhasil dihapus"]);
+    } else {
+      echo json_encode(["success" => false, "message" => mysqli_error($koneksi)]);
+    }
+    exit; // PENTING: Berhenti di sini agar tidak lanjut meload data
+  }
+
+  // 2. JIKA TIDAK ADA ACTION, MAKA AMBIL DATA (LOAD DEFAULT)
   $response = [];
 
-  // 1. Ambil Profil Sekolah
-  $qProfil = mysqli_query($koneksi, "SELECT * FROM profil_sekolah WHERE id=1 LIMIT 1");
-  $profil = mysqli_fetch_assoc($qProfil);
-  $response['profil'] = $profil;
+  // Ambil Profil
+  $qProfil = mysqli_query($koneksi, "SELECT * FROM profil_sekolah WHERE id=1");
+  $response['profil'] = mysqli_fetch_assoc($qProfil);
 
-  // 2. Ambil Riwayat Kwitansi (50 Terakhir)
+  // Ambil Riwayat (50 Terakhir)
   $qRiwayat = mysqli_query($koneksi, "SELECT * FROM kwitansi ORDER BY id DESC LIMIT 50");
-  $riwayat = [];
+  $data = [];
   while ($row = mysqli_fetch_assoc($qRiwayat)) {
-    $riwayat[] = $row;
+    $data[] = $row;
   }
-  $response['riwayat'] = $riwayat;
+  $response['riwayat'] = $data;
 
   echo json_encode($response);
   exit;
 }
 
-// --- POST: SIMPAN KWITANSI ATAU UPDATE PROFIL ---
+// --- POST: SIMPAN DATA ---
 if ($method == 'POST') {
 
-  // Cek apakah request berupa FormData (ada $_POST['action']) atau JSON Raw Body
-  $inputJSON = json_decode(file_get_contents("php://input"), true);
+  // Cek apakah ini Update Profil (FormData) atau Simpan Kwitansi (JSON)
+  $action = isset($_POST['action']) ? $_POST['action'] : '';
 
-  // VARIABEL UNTUK MENAMPUNG INPUT
-  $action = '';
-
-  if (isset($_POST['action'])) {
-    $action = $_POST['action']; // Dari FormData (Upload Profil)
-  } elseif (isset($inputJSON['dari'])) {
-    $action = 'simpan_kwitansi'; // Dari JSON (Simpan Transaksi)
-  }
-
-  // --- LOGIKA 1: UPDATE PROFIL & UPLOAD LOGO ---
+  // 1. UPDATE PROFIL & UPLOAD LOGO
   if ($action == 'update_profil') {
     $yayasan = $_POST['yayasan'];
     $nama_sekolah = $_POST['nama_sekolah'];
     $alamat = $_POST['alamat'];
 
-    // Default Query Update (Tanpa Logo)
+    // Default query tanpa ganti logo
     $query = "UPDATE profil_sekolah SET yayasan='$yayasan', nama_sekolah='$nama_sekolah', alamat='$alamat' WHERE id=1";
 
-    // Cek apakah ada file gambar diupload
+    // Cek jika ada file gambar diupload
     if (isset($_FILES['logo_img']) && $_FILES['logo_img']['error'] == 0) {
       $fileName = time() . '_' . basename($_FILES["logo_img"]["name"]);
       $targetFilePath = $target_dir . $fileName;
       $fileType = strtolower(pathinfo($targetFilePath, PATHINFO_EXTENSION));
 
-      // Validasi ekstensi
       $allowTypes = array('jpg', 'png', 'jpeg', 'gif');
       if (in_array($fileType, $allowTypes)) {
-        // Upload file ke server
         if (move_uploaded_file($_FILES["logo_img"]["tmp_name"], $targetFilePath)) {
-          // Update Query Include Logo
+          // Update query dengan logo baru
           $query = "UPDATE profil_sekolah SET yayasan='$yayasan', nama_sekolah='$nama_sekolah', alamat='$alamat', logo='$fileName' WHERE id=1";
         }
       }
     }
 
     if (mysqli_query($koneksi, $query)) {
-      echo json_encode(["success" => true, "message" => "Profil update"]);
+      echo json_encode(["success" => true, "message" => "Profil berhasil diupdate"]);
     } else {
       echo json_encode(["success" => false, "message" => mysqli_error($koneksi)]);
     }
   }
 
-  // --- LOGIKA 2: SIMPAN TRANSAKSI KWITANSI BARU (TANPA KELAS) ---
+  // 2. SIMPAN KWITANSI BARU (JSON)
   else {
-    // Ambil data dari JSON input
-    $dari = $inputJSON['dari'];
-    $untuk = $inputJSON['untuk'];
-    $nominal = $inputJSON['nominal'];
-    $tglManual = isset($inputJSON['tglManual']) ? $inputJSON['tglManual'] : date('Y-m-d H:i:s');
+    $input = json_decode(file_get_contents("php://input"), true);
 
-    // Generate Nomor Kwitansi Otomatis (Contoh: KW-231025-001)
-    // Format: KW-[TAHUN][BULAN][TANGGAL]-[ID_AUTO]
-    // Karena ID belum tau sebelum insert, kita insert dulu atau pakai timestamp
+    if (isset($input['dari'])) {
+      $dari = $input['dari'];
+      $untuk = $input['untuk'];
+      $nominal = $input['nominal'];
+      $tgl = date('Y-m-d H:i:s');
 
-    // Cara simpel: Generate dulu string unik
-    $prefix = "KW-" . date("ymd");
+      // Insert dulu untuk dapat ID
+      $ins = mysqli_query($koneksi, "INSERT INTO kwitansi (dari, untuk, nominal, tgl_kwitansi) VALUES ('$dari', '$untuk', '$nominal', '$tgl')");
 
-    // Cek urutan terakhir hari ini (Opsional, agar rapi)
-    // Disini kita pakai ID insert terakhir nanti untuk update nomornya agar urut
+      if ($ins) {
+        $last_id = mysqli_insert_id($koneksi);
+        // Generate Nomor: KW-[TAHUN]-[ID 5 DIGIT] -> KW-2024-00001
+        $no_kwitansi = "KW-" . date("Y") . "-" . str_pad($last_id, 5, "0", STR_PAD_LEFT);
 
-    $queryInsert = "INSERT INTO kwitansi (dari, untuk, nominal, tgl_kwitansi) VALUES ('$dari', '$untuk', '$nominal', '$tglManual')";
+        // Update nomor kwitansi
+        mysqli_query($koneksi, "UPDATE kwitansi SET no_kwitansi='$no_kwitansi' WHERE id=$last_id");
 
-    if (mysqli_query($koneksi, $queryInsert)) {
-      $last_id = mysqli_insert_id($koneksi);
-
-      // Format Nomor: KW + ID (Dipad 5 digit) -> KW-00001
-      $no_kwitansi = "KW-" . date("Y") . "-" . str_pad($last_id, 5, "0", STR_PAD_LEFT);
-
-      // Update nomor kwitansi ke database
-      mysqli_query($koneksi, "UPDATE kwitansi SET no_kwitansi='$no_kwitansi' WHERE id='$last_id'");
-
-      echo json_encode([
-        "success" => true,
-        "no_kwitansi" => $no_kwitansi,
-        "tgl" => $tglManual
-      ]);
-    } else {
-      echo json_encode(["success" => false, "message" => mysqli_error($koneksi)]);
+        echo json_encode(["success" => true, "no_kwitansi" => $no_kwitansi, "tgl" => $tgl]);
+      } else {
+        echo json_encode(["success" => false, "message" => mysqli_error($koneksi)]);
+      }
     }
   }
 }

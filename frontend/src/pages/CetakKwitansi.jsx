@@ -1,20 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Printer, FileText, Settings, Upload, Image as ImageIcon } from 'lucide-react';
+// UPDATE: Menambahkan Trash2 ke import
+import { Printer, FileText, Settings, Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { BASE_URL } from '../config'; 
 
 const CetakKwitansi = () => {
-  // State Form (Kelas Dihapus)
+  // State Form
   const [form, setForm] = useState({
     dari: '', untuk: '', nominal: '', tglManual: ''
   });
 
-  // State Profil (Tambah Logo)
+  // State Profil
   const [profil, setProfil] = useState({
     yayasan: '', nama_sekolah: '', alamat: '', logo: ''
   });
 
-  const [logoFile, setLogoFile] = useState(null); // State untuk file yang mau diupload
+  const [logoFile, setLogoFile] = useState(null);
   const [riwayat, setRiwayat] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -34,11 +35,26 @@ const CetakKwitansi = () => {
       .catch(err => console.error(err));
   };
 
-  // --- UPDATE PROFIL DENGAN UPLOAD LOGO ---
+  // --- UPDATE: FUNGSI HAPUS DATA ---
+  const handleDelete = (noKwitansi) => {
+    if(window.confirm(`Yakin ingin menghapus kwitansi No: ${noKwitansi}?`)) {
+        axios.get(`${BASE_URL}/api_kwitansi.php?action=delete&no_kwitansi=${noKwitansi}`)
+            .then(res => {
+                // Reload data apapun responsenya (kadang sukses tapi status code beda)
+                loadData(); 
+                if(!res.data.success) {
+                    console.warn("Info Server:", res.data);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                loadData(); // Tetap reload untuk memastikan data sinkron
+            });
+    }
+  };
+
   const handleUpdateProfil = (e) => {
     e.preventDefault();
-    
-    // Gunakan FormData agar bisa kirim file gambar
     const formData = new FormData();
     formData.append('action', 'update_profil');
     formData.append('yayasan', profil.yayasan);
@@ -55,12 +71,11 @@ const CetakKwitansi = () => {
       .then((res) => { 
           alert('Profil & Logo Berhasil Diupdate!'); 
           setShowSettings(false);
-          loadData(); // Reload agar logo baru tampil
+          loadData();
       })
       .catch(() => alert('Gagal update profil'));
   }
 
-  // --- RUMUS TERBILANG ---
   const terbilang = (angka) => {
     const bil = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
     let hasil = "";
@@ -88,138 +103,197 @@ const CetakKwitansi = () => {
     const dateObj = new Date(data.tgl_kwitansi || data.tgl || new Date());
     const tglIndo = dateObj.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
     
-    // Cek apakah ada logo, jika tidak pakai placeholder teks
-    // Pastikan BASE_URL mengarah ke folder gambar yang benar
+    // Logo logic
     const logoHtml = profil.logo 
-        ? `<img src="${BASE_URL}/uploads/${profil.logo}" style="width:100%; height:100%; object-fit:contain; border-radius:50%;" />`
-        : `<div style="display:flex; align-items:center; justify-content:center; height:100%; font-size:10px;">LOGO</div>`;
+        ? `<img src="${BASE_URL}/uploads/${profil.logo}" style="height: 60px; object-fit: contain;" />`
+        : `<div style="font-weight:bold; font-size:20px;">LOGO</div>`;
 
     doc.open();
     doc.write(`
       <html>
         <head>
-          <title>Bukti Pembayaran</title>
+          <title>Kuitansi</title>
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Times+New+Roman:ital,wght@0,400;0,700;1,400;1,700&display=swap');
-            body { font-family: 'Times New Roman', serif; padding: 10px; -webkit-print-color-adjust: exact; margin: 0; }
+            @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Roboto:wght@400;500;700&display=swap');
             
-            .container {
-                width: 100%; max-width: 800px; height: 380px;
-                border: 1px solid #ccc;
-                display: flex; margin: auto; position: relative;
+            body { 
+                font-family: 'Roboto', sans-serif; 
+                margin: 0; padding: 20px; 
+                background-color: #fff;
+                -webkit-print-color-adjust: exact; 
+            }
+            
+            .receipt-box {
+                width: 100%; max-width: 850px;
+                height: 400px;
+                margin: auto;
+                background-color: #FAF9F6; /* Cream color */
+                padding: 40px;
+                position: relative;
+                box-sizing: border-box;
+                border-radius: 8px;
+                overflow: hidden;
             }
 
-            .sidebar {
-                width: 80px; border-right: 2px solid #333;
-                margin: 5px 0;
-                display: flex; flex-direction: column;
-                justify-content: space-between; align-items: center;
-                padding: 10px 0; background: white; z-index: 2;
+            /* Decorative Circle Bottom Left */
+            .deco-circle-bl {
+                position: absolute; bottom: -50px; left: -50px;
+                width: 150px; height: 150px;
+                border: 2px dashed #EE6F57;
+                border-radius: 50%; opacity: 0.5;
+                pointer-events: none;
             }
-            .sidebar-logo {
-                width: 60px; height: 60px;
-                border-radius: 50%;
-                margin-top: 5px;
-            }
-            .text-vertical {
-                writing-mode: vertical-rl; transform: rotate(180deg); text-align: center;
-            }
-            .sekolah-nama { font-weight: bold; font-size: 16px; margin-left: 5px; text-transform: uppercase; letter-spacing: 1px;}
-            .yayasan-nama { font-size: 10px; margin-left: 2px; }
-            .alamat-sekolah { font-size: 8px; margin-left: 2px; }
-
-            .content { flex: 1; padding: 10px 20px; position: relative; }
-
-            .watermark {
-                position: absolute; top: 50%; left: 50%;
-                transform: translate(-50%, -50%);
-                font-size: 100px; font-weight: bold;
-                color: rgba(0, 0, 0, 0.03);
-                z-index: 0; pointer-events: none;
-                white-space: nowrap;
+             .deco-circle-bl-2 {
+                position: absolute; bottom: -40px; left: -40px;
+                width: 130px; height: 130px;
+                border: 2px dashed #EE6F57;
+                border-radius: 50%; opacity: 0.5;
+                pointer-events: none;
             }
 
-            .header-title {
-                text-align: right; font-size: 28px; font-weight: bold; font-style: italic; margin-bottom: 20px;
+            /* Decorative Circle Right */
+            .deco-circle-r {
+                position: absolute; top: 50%; right: -50px; transform: translateY(-50%);
+                width: 120px; height: 120px;
+                border: 2px dashed #EE6F57;
+                border-radius: 50%; opacity: 0.5;
+                pointer-events: none;
             }
-            .no-surat { font-weight: bold; font-size: 18px; margin-bottom: 10px; }
-
-            .row { display: flex; align-items: baseline; margin-bottom: 8px; position: relative; z-index: 1; }
-            .label { width: 130px; font-weight: bold; font-size: 14px; }
-            .separator { width: 10px; }
-            .value { flex: 1; border-bottom: 1px solid #000; padding-left: 5px; font-size: 14px; position: relative;}
-
-            .bg-strip {
-                background: #e0e0e0; display: inline-block; width: 100%;
-                padding: 2px 5px; transform: skewX(-15deg); margin-left: -5px;
+             .deco-circle-r-2 {
+                position: absolute; top: 50%; right: -40px; transform: translateY(-50%);
+                width: 100px; height: 100px;
+                border: 2px dashed #EE6F57;
+                border-radius: 50%; opacity: 0.5;
+                pointer-events: none;
             }
-            .bg-strip span { display: inline-block; transform: skewX(15deg); font-style: italic; font-weight: bold; }
 
-            .footer {
-                margin-top: 30px; display: flex; justify-content: space-between; align-items: flex-end; z-index: 1; position: relative;
+            .header {
+                display: flex; justify-content: space-between; align-items: flex-end;
+                margin-bottom: 10px;
+                position: relative; z-index: 2;
             }
-            .checkbox-area { font-size: 12px; display: flex; gap: 15px; border: 1px solid #333; padding: 5px; border-radius: 5px; }
-            .ttd-area { text-align: center; width: 200px; }
-        
+            
+            .company-info { display: flex; align-items: center; gap: 15px; }
+            .company-text h2 { margin: 0; font-size: 18px; color: #333; }
+            .company-text p { margin: 0; font-size: 12px; color: #666; }
+
+            .title {
+                font-family: 'Playfair Display', serif;
+                font-size: 48px;
+                font-weight: 700;
+                color: #222;
+                margin: 0;
+                line-height: 1;
+            }
+
+            .divider {
+                width: 100%; height: 2px; background-color: #EE6F57; /* Salmon color */
+                margin-bottom: 25px;
+                position: relative; z-index: 2;
+            }
+
+            .content { position: relative; z-index: 2; }
+
+            .row-nomor { font-weight: bold; font-size: 14px; margin-bottom: 20px; color: #000; }
+
+            .form-row {
+                display: flex; align-items: baseline;
+                margin-bottom: 15px;
+                font-size: 14px;
+            }
+            
+            .label { width: 160px; color: #444; font-weight: 400; }
+            
+            .value { 
+                flex: 1; 
+                border-bottom: 1px solid #EE6F57; /* Salmon underline */
+                padding-bottom: 2px;
+                font-weight: 700;
+                color: #000;
+            }
+
+            .amount-container {
+                margin-top: 25px;
+                display: inline-block;
+                background-color: #EE6F57;
+                color: white;
+                padding: 10px 20px;
+                font-weight: bold;
+                font-size: 18px;
+                border-radius: 2px;
+            }
+
+            .footer-row {
+                display: flex; justify-content: flex-end;
+                margin-top: -40px; /* Pull up to align with amount box area */
+                position: relative; z-index: 2;
+            }
+
+            .signature-block {
+                text-align: left;
+                width: 200px;
+            }
+            
+            .date-place { font-weight: bold; font-size: 14px; margin-bottom: 5px; }
+            .sign-label { font-size: 14px; margin-bottom: 60px; color: #444; }
+            
+            .sign-name {
+                font-weight: 400;
+                border-bottom: 1px solid #EE6F57;
+                display: inline-block;
+                min-width: 150px;
+                padding-bottom: 2px;
+            }
+
           </style>
         </head>
         <body>
-          <div class="container">
-            
-            <div class="sidebar">
-                <div class="sidebar-logo">
+          <div class="receipt-box">
+            <div class="deco-circle-bl"></div><div class="deco-circle-bl-2"></div>
+            <div class="deco-circle-r"></div><div class="deco-circle-r-2"></div>
+
+            <div class="header">
+                <div class="company-info">
                     ${logoHtml}
-                </div>
-                <div class="text-vertical sekolah-nama">${profil.nama_sekolah}</div>
-                <div class="text-vertical yayasan-nama">${profil.yayasan}</div>
-                <div class="text-vertical alamat-sekolah">${profil.alamat}</div>
-            </div>
-
-            <div class="content">
-                <div class="watermark">${profil.nama_sekolah}</div>
-                
-                <div class="header-title">BUKTI PEMBAYARAN</div>
-
-                <div class="no-surat">No. ${data.no_kwitansi || '..........'}</div>
-
-                <div class="row">
-                    <div class="label">Telah Terima Dari</div><div class="separator">:</div>
-                    <div class="value">${data.dari}</div>
-                </div>
-                
-                <div class="row">
-                    <div class="label">Terbilang</div><div class="separator">:</div>
-                    <div class="value" style="border:none;">
-                        <div class="bg-strip"><span># ${teksTerbilang} #</span></div>
+                    <div class="company-text">
+                        <h2>${profil.nama_sekolah || 'Nama Sekolah/Hotel'}</h2>
+                        <p>${profil.alamat || 'Alamat Lengkap Instansi'}</p>
                     </div>
                 </div>
+                <h1 class="title">Kuitansi</h1>
+            </div>
 
-                <div class="row" style="margin-top:5px;">
-                    <div class="label">Untuk Pembayaran</div><div class="separator">:</div>
+            <div class="divider"></div>
+
+            <div class="content">
+                <div class="row-nomor">Nomor: ${data.no_kwitansi || '....'}</div>
+
+                <div class="form-row">
+                    <div class="label">Sudah terima dari:</div>
+                    <div class="value">${data.dari}</div>
+                </div>
+
+                <div class="form-row">
+                    <div class="label">Banyaknya uang:</div>
+                    <div class="value" style="font-style:italic;">${teksTerbilang}</div>
+                </div>
+
+                <div class="form-row">
+                    <div class="label">Untuk pembayaran:</div>
                     <div class="value">${data.untuk}</div>
                 </div>
 
-                <div class="row" style="margin-top:15px;">
-                    <div class="label" style="font-size:16px;">Jumlah Rp.</div><div class="separator"></div>
-                    <div class="value" style="border:none; flex: 0.6;">
-                         <div class="bg-strip"><span>Rp ${parseInt(data.nominal).toLocaleString('id-ID')},-</span></div>
-                    </div>
+                <div class="amount-container">
+                    Rp${parseInt(data.nominal).toLocaleString('id-ID')},-
                 </div>
 
-                <div class="footer">
-                    <div class="checkbox-area">
-                        <div>Pembayaran Via:</div>
-                        <div>[ &nbsp; ] Cash</div>
-                        <div>[ &nbsp; ] Transfer</div>
-                    </div>
-
-                    <div class="ttd-area">
-                        <div>Tanggal, ${tglIndo}</div>
-                        <br><br><br>
-                        <div style="border-bottom:1px dotted #000; padding-bottom:2px;">( Penerima )</div>
+                <div class="footer-row">
+                    <div class="signature-block">
+                        <div class="date-place">Bali, ${tglIndo}</div>
+                        <div class="sign-label">Penerima,</div>
+                        <div class="sign-name">Latif Mulya</div>
                     </div>
                 </div>
-
             </div>
           </div>
         </body>
@@ -237,7 +311,7 @@ const CetakKwitansi = () => {
         if(res.data.success) {
             doPrint({ ...form, no_kwitansi: res.data.no_kwitansi, tgl: res.data.tgl });
             loadData();
-            setForm({...form, dari:'', untuk:'', nominal:''}); // Reset tanpa kelas
+            setForm({...form, dari:'', untuk:'', nominal:''}); 
         } else { alert('Gagal simpan'); }
     }).catch(err => { setLoading(false); alert('Gagal koneksi'); });
   };
@@ -248,10 +322,10 @@ const CetakKwitansi = () => {
 
       <div className="flex justify-between items-center bg-slate-800 p-4 rounded-xl text-white shadow-lg">
          <div className="flex items-center gap-3">
-             <FileText className="text-green-400" size={32}/>
+             <FileText className="text-[#EE6F57]" size={32}/>
              <div>
-                <h1 className="text-xl font-bold">BUKTI PEMBAYARAN</h1>
-                <p className="text-xs text-slate-400">Layout sesuai format sekolah</p>
+                <h1 className="text-xl font-bold">CETAK KWITANSI</h1>
+                <p className="text-xs text-slate-400">Model: Clean Coral Style</p>
              </div>
          </div>
          <button onClick={() => setShowSettings(!showSettings)} className="bg-slate-700 p-2 rounded-lg hover:bg-slate-600 transition">
@@ -259,22 +333,16 @@ const CetakKwitansi = () => {
          </button>
       </div>
 
-      {/* --- FORM PENGATURAN LOGO & KOP --- */}
+      {/* --- FORM PENGATURAN --- */}
       {showSettings && (
         <div className="bg-blue-900/20 border border-blue-800 p-6 rounded-xl animate-in fade-in">
             <h3 className="text-blue-400 font-bold mb-4 flex items-center gap-2">
                 <Settings size={18}/> Pengaturan Kop & Logo
             </h3>
             <form onSubmit={handleUpdateProfil} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* Input Teks */}
                 <div className="space-y-3">
                     <div>
-                        <label className="text-xs text-slate-400">Nama Yayasan (Kecil)</label>
-                        <input required value={profil.yayasan} onChange={e=>setProfil({...profil, yayasan:e.target.value})} className="w-full p-2 rounded bg-slate-900 text-white border border-slate-700"/>
-                    </div>
-                    <div>
-                        <label className="text-xs text-slate-400">Nama Sekolah (Besar)</label>
+                        <label className="text-xs text-slate-400">Nama Sekolah/Instansi</label>
                         <input required value={profil.nama_sekolah} onChange={e=>setProfil({...profil, nama_sekolah:e.target.value})} className="w-full p-2 rounded bg-slate-900 text-white border border-slate-700"/>
                     </div>
                     <div>
@@ -282,29 +350,20 @@ const CetakKwitansi = () => {
                         <textarea required rows="2" value={profil.alamat} onChange={e=>setProfil({...profil, alamat:e.target.value})} className="w-full p-2 rounded bg-slate-900 text-white border border-slate-700"></textarea>
                     </div>
                 </div>
-
-                {/* Input Logo */}
                 <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 rounded-xl p-4 bg-slate-900/50">
                     {profil.logo || logoFile ? (
-                         <div className="mb-3 relative">
-                            {logoFile ? (
-                                <img src={URL.createObjectURL(logoFile)} alt="Preview" className="h-24 w-24 object-contain bg-white rounded-full p-1"/>
-                            ) : (
-                                <img src={`${BASE_URL}/uploads/${profil.logo}`} alt="Current Logo" className="h-24 w-24 object-contain bg-white rounded-full p-1"/>
-                            )}
-                         </div>
+                          <div className="mb-3 relative">
+                             <img src={logoFile ? URL.createObjectURL(logoFile) : `${BASE_URL}/uploads/${profil.logo}`} alt="Preview" className="h-24 w-24 object-contain bg-white rounded-full p-1"/>
+                          </div>
                     ) : (
                         <ImageIcon size={40} className="text-slate-600 mb-2"/>
                     )}
-                    
                     <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-white text-xs py-2 px-4 rounded-lg flex items-center gap-2 border border-slate-600 transition">
                         <Upload size={14}/> {profil.logo ? 'Ganti Logo' : 'Upload Logo'}
                         <input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files[0])} className="hidden" />
                     </label>
-                    <p className="text-[10px] text-slate-500 mt-2">Format: JPG/PNG, Max 2MB</p>
                 </div>
-
-                <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold md:col-span-2 shadow-lg shadow-blue-900/20 mt-2">
+                <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold md:col-span-2 mt-2">
                     SIMPAN PENGATURAN
                 </button>
             </form>
@@ -313,53 +372,54 @@ const CetakKwitansi = () => {
 
       {/* --- FORM UTAMA & RIWAYAT --- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        
-        {/* Form Input Kwitansi */}
         <div className="md:col-span-2 bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-xl">
             <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                     <label className="text-xs text-slate-400 font-bold tracking-wider mb-1 block">TELAH TERIMA DARI</label>
-                    <input required value={form.dari} onChange={e=>setForm({...form, dari:e.target.value})} className="w-full p-3 rounded-lg bg-slate-900 text-white border border-slate-600 focus:border-blue-500 outline-none transition" placeholder="Nama Penyetor / Siswa"/>
+                    <input required value={form.dari} onChange={e=>setForm({...form, dari:e.target.value})} className="w-full p-3 rounded-lg bg-slate-900 text-white border border-slate-600 focus:border-[#EE6F57] outline-none transition" placeholder="Nama Penyetor"/>
                 </div>
-                
-                {/* Input Kelas sudah dihapus */}
-                
                 <div>
                     <label className="text-xs text-slate-400 font-bold tracking-wider mb-1 block">JUMLAH UANG (RP)</label>
                     <div className="relative">
                         <span className="absolute left-3 top-3 text-slate-500 font-bold">Rp</span>
-                        <input type="number" required value={form.nominal} onChange={e=>setForm({...form, nominal:e.target.value})} className="w-full p-3 pl-10 rounded-lg bg-slate-900 text-white font-bold text-lg border border-slate-600 focus:border-green-500 outline-none transition"/>
+                        <input type="number" required value={form.nominal} onChange={e=>setForm({...form, nominal:e.target.value})} className="w-full p-3 pl-10 rounded-lg bg-slate-900 text-white font-bold text-lg border border-slate-600 focus:border-[#EE6F57] outline-none transition"/>
                     </div>
-                    <p className="text-xs text-green-400 mt-1 italic bg-green-900/20 p-2 rounded border border-green-900/50">
+                    <p className="text-xs text-[#EE6F57] mt-1 italic bg-red-900/20 p-2 rounded border border-red-900/50">
                         Terbilang: {getTerbilang(form.nominal) || '-'}
                     </p>
                 </div>
                 <div>
                     <label className="text-xs text-slate-400 font-bold tracking-wider mb-1 block">UNTUK PEMBAYARAN</label>
-                    <textarea required rows="2" value={form.untuk} onChange={e=>setForm({...form, untuk:e.target.value})} className="w-full p-3 rounded-lg bg-slate-900 text-white border border-slate-600 focus:border-blue-500 outline-none transition" placeholder="Contoh: SPP Bulan Januari 2024"></textarea>
+                    <textarea required rows="2" value={form.untuk} onChange={e=>setForm({...form, untuk:e.target.value})} className="w-full p-3 rounded-lg bg-slate-900 text-white border border-slate-600 focus:border-[#EE6F57] outline-none transition" placeholder="Keterangan pembayaran..."></textarea>
                 </div>
-                
-                <button disabled={loading} className="w-full bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold flex justify-center items-center gap-2 shadow-lg shadow-green-900/20 transition-all transform active:scale-95">
+                <button disabled={loading} className="w-full bg-[#EE6F57] hover:bg-[#d65f49] text-white py-3 rounded-xl font-bold flex justify-center items-center gap-2 shadow-lg shadow-red-900/20 transition-all">
                     {loading ? 'Menyimpan...' : <><Printer size={20}/> CETAK BUKTI PEMBAYARAN</>}
                 </button>
             </form>
         </div>
 
-        {/* List Riwayat */}
         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 h-fit">
             <h3 className="text-white font-bold mb-3 border-b border-slate-700 pb-2">Riwayat Terakhir</h3>
             <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
                 {riwayat.map((item, i) => (
-                    <div key={i} className="bg-slate-900 p-3 rounded-lg border border-slate-700 text-sm hover:border-slate-500 transition">
+                    <div key={i} className="bg-slate-900 p-3 rounded-lg border border-slate-700 text-sm hover:border-[#EE6F57] transition group">
                         <div className="flex justify-between text-slate-400 text-[10px] mb-1">
                             <span>{item.no_kwitansi}</span>
                             <span>{item.tgl_kwitansi?.substring(0,10)}</span>
                         </div>
                         <div className="text-white font-bold truncate">{item.dari}</div>
-                        <div className="text-green-400 font-mono text-xs mt-1">Rp {parseInt(item.nominal).toLocaleString('id-ID')}</div>
-                        <button onClick={()=>doPrint(item)} className="w-full mt-2 bg-slate-800 text-blue-400 py-1.5 rounded-lg text-xs hover:bg-blue-600 hover:text-white transition flex items-center justify-center gap-1 border border-slate-700">
-                            <Printer size={12}/> Cetak Ulang
-                        </button>
+                        <div className="text-[#EE6F57] font-mono text-xs mt-1">Rp {parseInt(item.nominal).toLocaleString('id-ID')}</div>
+                        
+                        {/* UPDATE: MEMISAHKAN TOMBOL CETAK & HAPUS */}
+                        <div className="flex gap-2 mt-2">
+                            <button onClick={()=>doPrint(item)} className="flex-1 bg-slate-800 text-slate-300 py-1.5 rounded-lg text-xs group-hover:bg-[#EE6F57] group-hover:text-white transition flex items-center justify-center gap-1 border border-slate-700">
+                                <Printer size={12}/> Cetak
+                            </button>
+                            <button onClick={()=>handleDelete(item.no_kwitansi)} className="w-8 bg-slate-800 text-red-400 py-1.5 rounded-lg text-xs hover:bg-red-600 hover:text-white transition flex items-center justify-center border border-slate-700/50 hover:border-red-500" title="Hapus">
+                                <Trash2 size={12}/>
+                            </button>
+                        </div>
+
                     </div>
                 ))}
             </div>
