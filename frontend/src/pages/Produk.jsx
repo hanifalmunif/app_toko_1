@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Package, Plus, Trash2, Search, Tag, Box, DollarSign, Wallet } from 'lucide-react';
+import { Package, Plus, Trash2, Edit, Save, X, Search } from 'lucide-react'; // Tambah icon Edit, Save, X
 import { BASE_URL } from '../config';
 
 const Produk = () => {
   const [produkList, setProdukList] = useState([]);
+  
+  // State Form
   const [formData, setFormData] = useState({
     nama: '',
     merk: '',
@@ -14,6 +16,10 @@ const Produk = () => {
     stok: '',
     satuan: 'Unit'
   });
+
+  // State untuk mode Edit
+  const [isEditing, setIsEditing] = useState(false);
+  const [editId, setEditId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -36,18 +42,61 @@ const Produk = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // --- FUNGSI BARU: Handle Klik Tombol Edit di Tabel ---
+  const handleEdit = (item) => {
+    // Scroll ke atas agar user melihat form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    setIsEditing(true);
+    setEditId(item.id);
+    
+    // Isi form dengan data yang dipilih
+    // Perhatikan mapping: item.nama_produk (database) ke formData.nama (state input)
+    setFormData({
+        nama: item.nama_produk, 
+        merk: item.merk,
+        kategori: item.kategori,
+        modal: item.modal,
+        harga: item.harga,
+        stok: item.stok,
+        satuan: item.satuan
+    });
+  };
+
+  // --- FUNGSI BARU: Batal Edit ---
+  const handleCancel = () => {
+    setIsEditing(false);
+    setEditId(null);
+    setFormData({ 
+        nama: '', merk: '', kategori: 'Aksesoris', 
+        modal: '', harga: '', stok: '', satuan: 'Unit' 
+    });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    axios.post(`${BASE_URL}/api_produk.php`, formData)
-      .then(() => {
-        alert('Produk Lengkap Berhasil Disimpan!');
-        fetchData();
-        setFormData({ 
-            nama: '', merk: '', kategori: 'Aksesoris', 
-            modal: '', harga: '', stok: '', satuan: 'Unit' 
-        });
+
+    // Tentukan URL dan Payload berdasarkan mode (Edit atau Tambah)
+    // Asumsi: Anda punya file api_update_produk.php atau logic update di file yang sama
+    const url = isEditing 
+        ? `${BASE_URL}/api_update_produk.php` 
+        : `${BASE_URL}/api_produk.php`;
+
+    // Jika edit, kita butuh kirim ID juga
+    const payload = isEditing ? { ...formData, id: editId } : formData;
+
+    axios.post(url, payload)
+      .then((res) => {
+        // Cek response dari backend (opsional, tergantung struktur JSON backendmu)
+        alert(isEditing ? 'Produk Berhasil Diupdate!' : 'Produk Baru Berhasil Disimpan!');
+        
+        fetchData(); // Refresh tabel
+        handleCancel(); // Reset form ke mode awal
       })
-      .catch(err => alert('Gagal menyimpan data. Cek koneksi.'));
+      .catch(err => {
+        console.error(err);
+        alert('Gagal menyimpan data. Cek koneksi.');
+      });
   };
 
   const handleDelete = (id) => {
@@ -65,9 +114,10 @@ const Produk = () => {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       
       {/* --- FORM INPUT DETAIL --- */}
-      <div className="bg-[#1e293b] p-6 rounded-2xl border border-slate-800 h-fit">
+      <div className="bg-[#1e293b] p-6 rounded-2xl border border-slate-800 h-fit sticky top-4">
         <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-          <Package className="text-blue-500" /> Input Produk Baru
+          <Package className="text-blue-500" /> 
+          {isEditing ? 'Edit Data Produk' : 'Input Produk Baru'}
         </h3>
         
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -128,13 +178,28 @@ const Produk = () => {
 
           {/* Baris 4: Stok */}
           <div>
-            <label className="block text-slate-400 text-xs mb-1">Stok Awal</label>
+            <label className="block text-slate-400 text-xs mb-1">Stok Gudang</label>
             <input type="number" name="stok" value={formData.stok} onChange={handleChange} placeholder="Jumlah..." className="w-full bg-[#0f172a] border border-slate-700 rounded-lg py-2 px-3 text-white focus:border-blue-500" required />
           </div>
 
-          <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 mt-2">
-            <Plus size={18} /> Simpan Produk
-          </button>
+          {/* TOMBOL ACTION (Berubah sesuai mode) */}
+          <div className="flex gap-2 mt-2">
+            {isEditing ? (
+                <>
+                    <button type="button" onClick={handleCancel} className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                        <X size={18} /> Batal
+                    </button>
+                    <button type="submit" className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                        <Save size={18} /> Update
+                    </button>
+                </>
+            ) : (
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2">
+                    <Plus size={18} /> Simpan Produk
+                </button>
+            )}
+          </div>
+
         </form>
       </div>
 
@@ -158,37 +223,45 @@ const Produk = () => {
              </thead>
              <tbody className="divide-y divide-slate-700">
                 {isLoading ? (
-                    <tr><td colSpan="5" className="text-center py-8">Loading...</td></tr>
+                   <tr><td colSpan="5" className="text-center py-8">Loading...</td></tr>
                 ) : produkList.length === 0 ? (
-                    <tr><td colSpan="5" className="text-center py-8">Belum ada data.</td></tr>
+                   <tr><td colSpan="5" className="text-center py-8">Belum ada data.</td></tr>
                 ) : (
                   produkList.map((item) => (
-                     <tr key={item.id} className="hover:bg-slate-800/50 transition-colors">
-                        <td className="px-6 py-4">
-                            <div className="font-bold text-white text-base">{item.nama_produk}</div>
-                            <div className="text-xs text-slate-500 flex gap-2 mt-1">
-                                <span className="bg-slate-700 px-2 py-0.5 rounded text-slate-300">{item.merk || '-'}</span>
-                                <span>{item.kategori}</span>
-                            </div>
-                        </td>
-                        <td className="px-6 py-4 text-slate-500">
-                           {formatRupiah(item.modal)}
-                        </td>
-                        <td className="px-6 py-4">
-                           <div className="text-blue-400 font-bold text-base">{formatRupiah(item.harga)}</div>
-                           {/* Hitung Laba Kasar */}
-                           <div className="text-xs text-green-500 mt-1">
+                      <tr key={item.id} className="hover:bg-slate-800/50 transition-colors">
+                         <td className="px-6 py-4">
+                             <div className="font-bold text-white text-base">{item.nama_produk}</div>
+                             <div className="text-xs text-slate-500 flex gap-2 mt-1">
+                                 <span className="bg-slate-700 px-2 py-0.5 rounded text-slate-300">{item.merk || '-'}</span>
+                                 <span>{item.kategori}</span>
+                             </div>
+                         </td>
+                         <td className="px-6 py-4 text-slate-500">
+                            {formatRupiah(item.modal)}
+                         </td>
+                         <td className="px-6 py-4">
+                            <div className="text-blue-400 font-bold text-base">{formatRupiah(item.harga)}</div>
+                            <div className="text-xs text-green-500 mt-1">
                                Laba: {formatRupiah(item.harga - item.modal)}
-                           </div>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                           <div className="font-bold text-white">{item.stok}</div>
-                           <div className="text-xs text-slate-500">{item.satuan}</div>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                           <button onClick={() => handleDelete(item.id)} className="p-2 bg-slate-700 rounded-lg hover:bg-red-600 text-white transition-colors"><Trash2 size={16}/></button>
-                        </td>
-                     </tr>
+                            </div>
+                         </td>
+                         <td className="px-6 py-4 text-center">
+                            <div className="font-bold text-white">{item.stok}</div>
+                            <div className="text-xs text-slate-500">{item.satuan}</div>
+                         </td>
+                         <td className="px-6 py-4 text-right">
+                             <div className="flex justify-end gap-2">
+                                {/* Tombol Edit */}
+                                <button onClick={() => handleEdit(item)} className="p-2 bg-slate-700 rounded-lg hover:bg-yellow-600 text-white transition-colors">
+                                    <Edit size={16}/>
+                                </button>
+                                {/* Tombol Hapus */}
+                                <button onClick={() => handleDelete(item.id)} className="p-2 bg-slate-700 rounded-lg hover:bg-red-600 text-white transition-colors">
+                                    <Trash2 size={16}/>
+                                </button>
+                             </div>
+                         </td>
+                      </tr>
                   ))
                 )}
              </tbody>

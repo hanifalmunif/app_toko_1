@@ -5,12 +5,18 @@ import { BASE_URL } from '../config';
 
 const Service = () => {
   const [serviceList, setServiceList] = useState([]);
-  
-  // Kita set tanggal default ke hari ini (format YYYY-MM-DD)
   const today = new Date().toISOString().split('T')[0];
 
+  // --- KONFIGURASI NAMA TOKO (GANTI DISINI) ---
+  const shopProfile = {
+    name: "GALERI KOMPUTER & SERVICE",
+    address: "Jl. Merdeka No. 45, Jakarta Pusat",
+    phone: "0812-9999-8888",
+    email: "admin@galerikomputer.com"
+  };
+
   const [formData, setFormData] = useState({
-    tgl_masuk: today, // Field baru untuk tanggal
+    tgl_masuk: today,
     nama_pelanggan: '',
     no_telp: '',
     nama_barang: '',
@@ -37,7 +43,6 @@ const Service = () => {
       .then(() => {
         alert('Data Berhasil Disimpan!');
         fetchData();
-        // Reset form tapi tanggal tetap hari ini
         setFormData({ 
             tgl_masuk: today, 
             nama_pelanggan: '', 
@@ -68,62 +73,127 @@ const Service = () => {
     }
   };
 
-  // --- FUNGSI CETAK NOTA (NEW!) ---
+  const formatRupiah = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka);
+
+  // --- FUNGSI CETAK NOTA TERBARU (DENGAN TABEL & NAMA TOKO) ---
   const handlePrint = (item) => {
-    // Membuka jendela baru untuk cetak
-    const printWindow = window.open('', '', 'height=600,width=400');
+    const printWindow = window.open('', '', 'height=800,width=1000');
     
-    // Desain HTML untuk Struk/Nota
+    // Generate Nomor Nota
+    const noNota = `SRV-${String(item.id).padStart(5, '0')}`;
+    const tglCetak = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
     printWindow.document.write(`
       <html>
         <head>
           <title>Nota Servis - ${item.nama_pelanggan}</title>
           <style>
-            body { font-family: 'Courier New', monospace; padding: 20px; text-align: left; }
-            .header { text-align: center; margin-bottom: 20px; border-bottom: 2px dashed #000; padding-bottom: 10px; }
-            .title { font-size: 18px; font-weight: bold; }
-            .info { margin-bottom: 15px; font-size: 14px; }
-            .item { border-bottom: 1px dashed #ccc; padding: 10px 0; }
-            .footer { margin-top: 30px; text-align: center; font-size: 12px; }
-            .total { font-weight: bold; font-size: 16px; margin-top: 10px; text-align: right;}
+            body { font-family: Arial, sans-serif; font-size: 12px; color: #333; padding: 20px; }
+            .header { text-align: center; margin-bottom: 20px; border-bottom: 3px double #000; padding-bottom: 10px; }
+            .header h1 { margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; }
+            .header p { margin: 2px 0; font-size: 12px; }
+            
+            .info-container { display: flex; justify-content: space-between; margin-bottom: 20px; }
+            .info-box { width: 48%; border: 1px solid #000; padding: 10px; border-radius: 4px; }
+            .info-title { font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 5px; padding-bottom: 2px; }
+            .row { display: flex; margin-bottom: 3px; }
+            .label { width: 100px; font-weight: bold; }
+
+            /* STYLE UNTUK TABEL */
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            th, td { border: 1px solid #000; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; text-align: center; font-weight: bold; }
+            .text-right { text-align: right; }
+            .text-center { text-align: center; }
+            .no-border { border: none; }
+
+            .footer { display: flex; justify-content: space-between; margin-top: 30px; }
+            .signature-box { text-align: center; width: 200px; }
+            .signature-line { margin-top: 60px; border-bottom: 1px solid #000; }
+            
+            .grand-total { font-size: 16px; font-weight: bold; background: #eee; padding: 5px; }
+
+            @media print {
+              @page { margin: 0.5cm; }
+            }
           </style>
         </head>
         <body>
-          <div class="header">
-            <div class="title">TOKO KOMPUTER</div>
-            <div>Jl. Teknologi No. 12, Kota Digital</div>
-            <div>Telp: 0812-3456-7890</div>
-          </div>
           
-          <div class="info">
-            <div><strong>Tgl Masuk:</strong> ${item.tgl_masuk}</div>
-            <div><strong>Pelanggan:</strong> ${item.nama_pelanggan}</div>
-            <div><strong>Telp:</strong> ${item.no_telp}</div>
-            <div><strong>Status:</strong> ${item.status}</div>
+          <div class="header">
+            <h1>${shopProfile.name}</h1>
+            <p>${shopProfile.address}</p>
+            <p>Telp/WA: ${shopProfile.phone} | Email: ${shopProfile.email}</p>
           </div>
 
-          <hr/>
-
-          <div class="item">
-            <div><strong>Unit:</strong> ${item.nama_barang}</div>
-            <div><strong>Keluhan:</strong> ${item.keluhan}</div>
+          <div class="info-container">
+            <div class="info-box">
+              <div class="info-title">DATA PELANGGAN</div>
+              <div class="row"><div class="label">Nama</div> : ${item.nama_pelanggan}</div>
+              <div class="row"><div class="label">Telepon</div> : ${item.no_telp}</div>
+              <div class="row"><div class="label">Tanggal Masuk</div> : ${item.tgl_masuk}</div>
+            </div>
+            <div class="info-box">
+              <div class="info-title">DETAIL NOTA</div>
+              <div class="row"><div class="label">No. Nota</div> : <strong>${noNota}</strong></div>
+              <div class="row"><div class="label">Tgl Cetak</div> : ${tglCetak}</div>
+              <div class="row"><div class="label">Status</div> : ${item.status}</div>
+            </div>
           </div>
 
-          <div class="total">
-            Biaya: ${formatRupiah(item.biaya)}
-          </div>
+          <h3>Rincian Jasa & Barang</h3>
+          <table>
+            <thead>
+              <tr>
+                <th width="5%">No</th>
+                <th width="30%">Unit / Barang</th>
+                <th width="40%">Keluhan / Perbaikan</th>
+                <th width="25%">Biaya (Rp)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="text-center">1</td>
+                <td>${item.nama_barang}</td>
+                <td>${item.keluhan}</td>
+                <td class="text-right">${formatRupiah(item.biaya)}</td>
+              </tr>
+              <tr style="height: 25px;"><td>2</td><td></td><td></td><td></td></tr>
+              <tr style="height: 25px;"><td>3</td><td></td><td></td><td></td></tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="3" class="text-right grand-total">TOTAL BAYAR</td>
+                <td class="text-right grand-total">${formatRupiah(item.biaya)}</td>
+              </tr>
+            </tfoot>
+          </table>
 
           <div class="footer">
-            <p>-- Tanda Terima Servis --</p>
-            <p>Barang yang tidak diambil dalam 3 bulan<br/>diluar tanggung jawab kami.</p>
+            <div class="signature-box">
+              <p>Hormat Kami,</p>
+              <div class="signature-line"></div>
+              <p>( Admin )</p>
+            </div>
+            
+            <div class="signature-box">
+              <p>Penerima / Pelanggan,</p>
+              <div class="signature-line"></div>
+              <p>( ${item.nama_pelanggan} )</p>
+            </div>
           </div>
+
+          <div style="margin-top: 20px; font-size: 10px; font-style: italic;">
+            * Garansi servis 1 minggu untuk kerusakan yang sama.<br/>
+            * Barang yang tidak diambil lebih dari 1 bulan diluar tanggung jawab kami.
+          </div>
+
         </body>
       </html>
     `);
     
     printWindow.document.close();
     printWindow.focus();
-    // Tunggu sebentar agar style terload baru print
     setTimeout(() => {
       printWindow.print();
       printWindow.close();
@@ -141,8 +211,6 @@ const Service = () => {
     }
   };
 
-  const formatRupiah = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka);
-
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
       
@@ -153,8 +221,6 @@ const Service = () => {
         </h3>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-            
-          {/* Tanggal Manual */}
           <div>
             <label className="block text-slate-400 text-xs mb-1">Tanggal Masuk</label>
             <div className="relative">
@@ -240,7 +306,7 @@ const Service = () => {
                         <div className="flex items-center gap-2 w-full justify-end">
                             
                             {/* TOMBOL CETAK NOTA (BARU) */}
-                            <button onClick={() => handlePrint(item)} className="p-2 bg-blue-600 text-white hover:bg-blue-500 rounded-lg transition-colors" title="Cetak Nota">
+                            <button onClick={() => handlePrint(item)} className="p-2 bg-white text-slate-800 hover:bg-gray-200 rounded-lg transition-colors border border-slate-300" title="Cetak Nota">
                                 <Printer size={16} />
                             </button>
 
